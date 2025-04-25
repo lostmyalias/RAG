@@ -1,0 +1,27 @@
+[tool.poetry]
+name         = "RAG"
+version      = "0.1.0"
+description  = "RaveCraft Implementation of Retrieval-Augmented Generation"
+authors      = ["lostmyalias"]
+package-mode = true
+
+[tool.poetry.dependencies]
+python               = ">=3.9,<4.0"
+torch               = {version = "^2.2.0", source = "pytorch"}
+torchvision         = {version = "^0.17.0", source = "pytorch"}
+sentence-transformers = "^2.2"
+pymilvus            = "^2.4"
+fastapi             = "^0.100"
+uvicorn             = "^0.23"
+httpx               = "^0.27"
+hf_xet              = "^0.1"
+einops              = "^0.8"
+
+[[tool.poetry.source]]
+name = "pytorch"
+url = "https://download.pytorch.org/whl/cpu"
+priority = "explicit"
+
+[build-system]
+requires      = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

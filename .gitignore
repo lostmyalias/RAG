@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+env/
+.env
+.venv
+venv/
+.pytest_cache/
+
+# Poetry
+dist/
+*.egg-info/
+
+# Docker
+.data.sha
+ollama-models/
+
+# IDE
+.vscode/
+.idea/
+
+# Data files, keep directory
+data/*
+!data/.gitkeep
