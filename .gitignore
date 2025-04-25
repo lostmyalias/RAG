@@ -16,6 +16,7 @@ dist/
 # Docker
 .data.sha
 ollama-models/
+docker-compose.override.yml
 
 # IDE
 .vscode/
