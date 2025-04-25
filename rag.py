@@ -1,43 +1,58 @@
-# rag.py — core RAG utils + CLI
+"""
+rag.py — core Retrieval-Augmented Generation utilities + CLI helpers.
+"""
+
+from __future__ import annotations
+
 import argparse
+import logging
 import textwrap
 from sentence_transformers import SentenceTransformer
 from pymilvus import connections, Collection
 from config import (
-    EMBED_MODEL,MILVUS_HOST, MILVUS_PORT, COLLECTION, TOP_K, NPROBE,
+    EMBED_MODEL, MILVUS_HOST, MILVUS_PORT,
+    COLLECTION, TOP_K, NPROBE,
 )
 from utils import chunk_text, get_txt_files
 
-# Initialize model once at module level
-_model = SentenceTransformer(EMBED_MODEL)
+# ─── Logging ──────────────────────────────────────────────────────────────────
+logging.basicConfig(level=logging.INFO,
+                    format="%(asctime)s | %(levelname)s | %(message)s")
+logger = logging.getLogger(__name__)
 
-def embed(question, model_name=EMBED_MODEL):
-    if model_name != EMBED_MODEL:
-        raise ValueError(f"Model switching not supported. Using {EMBED_MODEL}")
-    return _model.encode(question, normalize_embeddings=True).tolist()
+# ─── Embedder ────────────────────────────────────────────────────────────────
+_model = SentenceTransformer(EMBED_MODEL, trust_remote_code=True)
 
-def retrieve(vec,
-            collection=None,
-            host=MILVUS_HOST,
-            port=MILVUS_PORT,
-            coll_name=COLLECTION,
-            k=TOP_K,
-            nprobe=NPROBE):
-    """Search for similar chunks using vector embedding."""
+def embed(text: str) -> list[float]:
+    """Return a normalized embedding for *text*."""
+    return _model.encode(text, normalize_embeddings=True).tolist()
+
+# ─── Vector search ───────────────────────────────────────────────────────────
+def retrieve(vec: list[float],
+             collection: Collection | None = None,
+             host: str = MILVUS_HOST,
+             port: int = MILVUS_PORT,
+             coll_name: str = COLLECTION,
+             k: int = TOP_K,
+             nprobe: int = NPROBE) -> list[str]:
+
     if collection is None:
         if not connections.has_connection("default"):
             connections.connect(host=host, port=port)
         collection = Collection(coll_name)
-        
+
     hits = collection.search(
         [vec], "embedding",
         param={"metric_type": "IP", "params": {"nprobe": nprobe}},
         limit=k,
-        output_fields=["chunk"]
+        output_fields=["chunk"],
     )
-    return [h.entity.get("chunk") for h in hits[0]]
+    chunks = [h.entity.get("chunk") for h in hits[0]]
+    logger.info("retrieve(): %d chunks (k=%d, nprobe=%d)", len(chunks), k, nprobe)
+    return chunks
 
-def build_prompt(chunks, question):
+# ─── Prompt builder ──────────────────────────────────────────────────────────
+def build_prompt(chunks: list[str], question: str) -> str:
     ctx = "\n\n---\n\n".join(chunks)
     return textwrap.dedent(f"""
         You are **RaveCraft-GPT**, the domain-expert assistant for the Shopify store
@@ -51,8 +66,7 @@ def build_prompt(chunks, question):
           (e.g., “Home → Collections → CyberPulse 3D LED Glasses”).  
         • Quote product titles, prices, or button labels exactly as written.  
         • Do **not** invent URLs or details.  
-        • If the question is ambiguous, ask one clarifying question instead of guessing.  
-        • Default to ≤ 4 concise sentences unless the user explicitly asks for depth.
+        • Default to ≤ 4 concise sentences unless depth is requested.
 
         <Context>
         {ctx}
@@ -65,45 +79,45 @@ def build_prompt(chunks, question):
         <Answer>
     """).strip()
 
-
-
-# ── CLI entry-points ─────────────────────────────────────────────────────────
-
+# ─── CLI entry-points ────────────────────────────────────────────────────────
 def _cli_embed(args):
-    vec = embed(args.question, args.model)
-    print(vec)
+    print(embed(args.question))
 
 def _cli_retrieve(args):
-    chunks = retrieve(args.vector, args.host, args.port, args.collection, args.k, args.nprobe)
-    for c in chunks:
-        print(c)
+    chunks = retrieve(
+        args.vector,
+        host=args.host,
+        port=args.port,
+        coll_name=args.collection,
+        k=args.k,
+        nprobe=args.nprobe,
+    )
+    print("\n\n".join(chunks))
 
 def _cli_prompt(args):
-    prompt = build_prompt(args.chunks, args.question)
-    print(prompt)
+    print(build_prompt(args.chunks, args.question))
 
-def cli():
+def cli() -> None:
     p = argparse.ArgumentParser(prog="rag")
-    subs = p.add_subparsers(dest="cmd", required=True)
+    sub = p.add_subparsers(dest="cmd", required=True)
 
-    e = subs.add_parser("embed", help="Encode a question")
-    e.add_argument("question", help="User prompt text")
-    e.add_argument("--model", default=EMBED_MODEL)
+    e = sub.add_parser("embed", help="Encode a question")
+    e.add_argument("question")
     e.set_defaults(func=_cli_embed)
 
-    r = subs.add_parser("retrieve", help="Retrieve top-k chunks")
-    r.add_argument("vector", nargs="+", type=float, help="Embedding vector")
-    r.add_argument("--host",       default=MILVUS_HOST)
-    r.add_argument("--port",       default=MILVUS_PORT)
+    r = sub.add_parser("retrieve", help="Vector search")
+    r.add_argument("vector", nargs="+", type=float)
+    r.add_argument("--host", default=MILVUS_HOST)
+    r.add_argument("--port", default=MILVUS_PORT)
     r.add_argument("--collection", default=COLLECTION)
     r.add_argument("-k", type=int, default=TOP_K)
     r.add_argument("--nprobe", type=int, default=NPROBE)
     r.set_defaults(func=_cli_retrieve)
 
-    p_ = subs.add_parser("prompt", help="Build the LLM prompt")
-    p_.add_argument("question", help="User question")
-    p_.add_argument("chunks", nargs="+", help="Retrieved context chunks")
-    p_.set_defaults(func=_cli_prompt)
+    pp = sub.add_parser("prompt", help="Craft prompt")
+    pp.add_argument("question")
+    pp.add_argument("chunks", nargs="+")
+    pp.set_defaults(func=_cli_prompt)
 
     args = p.parse_args()
     args.func(args)

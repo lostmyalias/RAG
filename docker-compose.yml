@@ -1,7 +1,7 @@
 services:
-  # Milvus (vector store)
+  # ── Milvus ─────────────────────────────────────────────────────────────────
   milvus:
-    image: milvusdb/milvus:v2.4.22
+    image: milvusdb/milvus:v2.4.23
     container_name: milvus
     command: ["milvus", "run", "standalone"]
     restart: unless-stopped
@@ -21,7 +21,7 @@ services:
       timeout: 5s
       retries: 3
 
-  # One-shot init – vectorize & ingest → exit
+  # ── One-shot DB initialiser ───────────────────────────────────────────────
   init-db:
     build:
       context: .
@@ -34,21 +34,20 @@ services:
     environment:
       MILVUS_HOST: milvus
       MILVUS_PORT: "19530"
-      LLM_TIMEOUT: "120"
     volumes:
       - ./data:/app/data
-    command: >
+    command: |
       bash -c '
-        checksum=$(sha1sum /app/data/*.txt | sha1sum)
-        if [ "$checksum" != "$(cat /app/.data.sha 2>/dev/null || true)" ]; then
-          echo "Data changes detected, rebuilding vectors..."
-          python vectorstore.py && echo "$checksum" > /app/.data.sha
+        checksum=$$(sha1sum /app/data/*.txt | sha1sum)
+        if [ "$$checksum" != "$$(cat /app/.data.sha 2>/dev/null)" ]; then
+          echo "Data changes detected – rebuilding vectors..."
+          python vectorstore.py && echo "$$checksum" > /app/.data.sha
         else
           echo "Vectors up-to-date, skipping rebuild."
         fi
       '
 
-  # Ollama HTTP server
+  # ── Ollama ────────────────────────────────────────────────────────────────
   ollama:
     image: ollama/ollama-custom
     container_name: ollama
@@ -59,15 +58,15 @@ services:
     ports:
       - "11434:11434"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/"]
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
       interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 5s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
     volumes:
       - ./ollama-models:/root/.ollama
 
-  # FastAPI RAG service
+  # ── FastAPI ───────────────────────────────────────────────────────────────
   fastapi:
     build: .
     container_name: fastapi
