@@ -67,6 +67,7 @@ def build_prompt(chunks: list[str], question: str) -> str:
         • Quote product titles, prices, or button labels exactly as written.  
         • Do **not** invent URLs or details.  
         • Default to ≤ 4 concise sentences unless depth is requested.
+        • You are speaking to a customer who is asking you questions. Answer as a helper.
 
         <Context>
         {ctx}

@@ -19,6 +19,6 @@ NPROBE = int(os.getenv("NPROBE", "10"))
 LLM_HOST        = os.getenv("LLM_HOST", "localhost")
 LLM_PORT        = int(os.getenv("LLM_PORT", "11434"))
 LLM_MODEL       = os.getenv("LLM_MODEL", "llama3.1:8b")
-LLM_TIMEOUT     = float(os.getenv("LLM_TIMEOUT", "180")) # Default timeout bumped to 180 s so the runner can spin up once
+LLM_TIMEOUT     = float(os.getenv("LLM_TIMEOUT", "180"))
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.7"))
 LLM_MAX_TOKENS  = int(os.getenv("LLM_MAX_TOKENS", "256"))
